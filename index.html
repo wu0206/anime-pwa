@@ -23,9 +23,10 @@
     import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     
     // =================================================================
-    // ⚠️ 關鍵步驟：請在此填入您的 Firebase Config 才能跨裝置同步
+    // ⚠️ 關鍵步驟：請在此填入您的 Firebase Config
+    // (請參考您提供的 firebase.js 內容填寫)
     // =================================================================
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+    const firebaseConfig = {
       apiKey: "AIzaSyCXmP9znEh3Xm8SL2ylgr2MvehiAtCtKKQ",
       authDomain: "anime-sync-8910d.firebaseapp.com",
       projectId: "anime-sync-8910d",
@@ -77,9 +78,8 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
-    // --- 固定 App ID 以確保資料不遺失且同步 ---
-    // 只要保留這個 ID，以後更新程式碼，資料都會從雲端抓回來
-    const APP_ID = "anime_tracker_production_v1";
+    // --- 固定路徑名稱 (類似您的參考 App) ---
+    const COLLECTION_NAME = "anime_tracker_data";
 
     // --- 圖示 ---
     const Icons = {
@@ -147,6 +147,7 @@
       const [deletingItem, setDeletingItem] = useState(null);
       const [rateModal, setRateModal] = useState({ isOpen: false, item: null, source: null });
       const [resetConfirm, setResetConfirm] = useState(false);
+      const [isConnected, setIsConnected] = useState(false); // 連線狀態指示
 
       // Auth & Sync
       useEffect(() => {
@@ -154,18 +155,15 @@
         const unsubAuth = window.onAuthStateChanged(window.auth, (u) => {
           setUser(u);
           if (u) {
-             // 登入成功後開始監聽資料
              syncData(u);
           } else {
              setLoading(false);
           }
         });
         
-        // 處理重導向登入結果 (Mobile)
+        // 處理 Redirect 登入結果
         window.getRedirectResult(window.auth).then((result) => {
-           if (result) {
-             console.log("Redirect login success:", result.user);
-           }
+           if (result) console.log("Redirect login success:", result.user);
         }).catch((error) => {
            console.error("Redirect login error:", error);
            alert("登入錯誤: " + error.message);
@@ -177,19 +175,23 @@
       const syncData = (currentUser) => {
         if (!currentUser || !window.db) return;
         
-        const docRef = window.doc(window.db, "artifacts", APP_ID, "users", currentUser.uid, "anime_data", "main");
+        // 使用與參考 App 類似的結構：users/{uid}/anime_tracker_data/main
+        const docRef = window.doc(window.db, "users", currentUser.uid, "anime_tracker_data", "main");
 
         const unsubData = window.onSnapshot(docRef, (doc) => {
             if (doc.exists()) {
               setDataState(doc.data());
+              setIsConnected(true);
             } else {
               const initial = generateInitialData();
               window.setDoc(docRef, initial);
               setDataState(initial);
+              setIsConnected(true);
             }
             setLoading(false);
         }, (error) => {
             console.warn("Sync Error", error);
+            setIsConnected(false);
             setLoading(false);
         });
       };
@@ -199,22 +201,23 @@
         const newData = typeof newDataOrFn === 'function' ? newDataOrFn(data) : newDataOrFn;
         setDataState(newData); 
         
-        const docRef = window.doc(window.db, "artifacts", APP_ID, "users", user.uid, "anime_data", "main");
+        const docRef = window.doc(window.db, "users", user.uid, "anime_tracker_data", "main");
         window.setDoc(docRef, newData).catch(console.error);
       };
 
-      // 混合登入策略：先 Popup，失敗則 Redirect
+      // 混合登入策略
       const login = async () => {
         const provider = new window.GoogleAuthProvider();
         try {
-          await window.signInWithPopup(window.auth, provider);
-        } catch (error) {
-          // 如果 Popup 被擋或失敗，嘗試 Redirect
-          if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
-             await window.signInWithRedirect(window.auth, provider);
+          // 手機端優先使用 Redirect 以避免彈窗被擋
+          if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+              await window.signInWithRedirect(window.auth, provider);
           } else {
-             alert("登入失敗: " + error.message);
+              await window.signInWithPopup(window.auth, provider);
           }
+        } catch (error) {
+          console.log("Login fallback to redirect...", error);
+          await window.signInWithRedirect(window.auth, provider);
         }
       };
       
@@ -320,7 +323,10 @@
             {activeTab === 'history' && <HistoryView list={data.history} setData={setData} handleSearch={handleGoogleSearch} requestDelete={requestDelete} openEditModal={openEditModal} />}
           </main>
 
-          <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4px)] left-1/2 transform -translate-x-1/2 text-[10px] text-gray-400 pointer-events-none select-none opacity-50">v1.0.7</div>
+          <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4px)] left-1/2 transform -translate-x-1/2 flex flex-col items-center pointer-events-none select-none opacity-50">
+             <span className="text-[10px] text-gray-400">v1.0.8</span>
+             {isConnected ? <span className="text-[8px] text-green-500">● 已同步</span> : <span className="text-[8px] text-red-400">● 未連線</span>}
+          </div>
 
           {editingItem && <Modal title="編輯" onClose={() => setEditingItem(null)}><EditForm initialData={editingItem.item} onSave={saveEdit} onClose={() => setEditingItem(null)} /></Modal>}
           {deletingItem && <Modal title="刪除確認" onClose={() => setDeletingItem(null)}><div className="text-center p-4"><p className="mb-4">確定要刪除「{deletingItem.name}」嗎？</p><div className="flex gap-2"><button onClick={() => setDeletingItem(null)} className="flex-1 py-2 bg-gray-100 rounded">取消</button><button onClick={confirmDelete} className="flex-1 py-2 bg-red-600 text-white rounded">刪除</button></div></div></Modal>}
