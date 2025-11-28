@@ -153,9 +153,11 @@
 
       useEffect(() => {
         if (!user || !window.db) return;
-        const rawAppId = (typeof __app_id !== 'undefined') ? __app_id : 'default-app';
-        const appId = rawAppId.replace(/[^a-zA-Z0-9_-]/g, '_'); 
-        // 修正：每個使用者的資料存在自己的 uid 下
+        
+        // 修正：使用固定的 App ID (anime_tracker_stable_v1)
+        // 這樣所有設備都會連到同一個資料庫位置
+        const appId = "anime_tracker_stable_v1"; 
+        
         const docRef = window.doc(window.db, "artifacts", appId, "users", user.uid, "anime_data", "main");
 
         const unsubData = window.onSnapshot(docRef, (doc) => {
@@ -178,8 +180,10 @@
         if (!data || !user) return;
         const newData = typeof newDataOrFn === 'function' ? newDataOrFn(data) : newDataOrFn;
         setDataState(newData); 
-        const rawAppId = (typeof __app_id !== 'undefined') ? __app_id : 'default-app';
-        const appId = rawAppId.replace(/[^a-zA-Z0-9_-]/g, '_');
+        
+        // 使用相同的固定 ID
+        const appId = "anime_tracker_stable_v1";
+        
         const docRef = window.doc(window.db, "artifacts", appId, "users", user.uid, "anime_data", "main");
         window.setDoc(docRef, newData).catch(console.error);
       };
@@ -288,6 +292,8 @@
             {activeTab === 'seasonal' && <SeasonalView seasonalData={data.seasonal} historyData={data.history} setData={setData} handleSearch={handleGoogleSearch} requestDelete={requestDelete} openEditModal={openEditModal} openRateModal={openRateModal} />}
             {activeTab === 'history' && <HistoryView list={data.history} setData={setData} handleSearch={handleGoogleSearch} requestDelete={requestDelete} openEditModal={openEditModal} />}
           </main>
+
+          <div className="fixed bottom-1 right-1 text-[10px] text-gray-300 pointer-events-none select-none">v1.0.1</div>
 
           {editingItem && <Modal title="編輯" onClose={() => setEditingItem(null)}><EditForm initialData={editingItem.item} onSave={saveEdit} onClose={() => setEditingItem(null)} /></Modal>}
           {deletingItem && <Modal title="刪除確認" onClose={() => setDeletingItem(null)}><div className="text-center p-4"><p className="mb-4">確定要刪除「{deletingItem.name}」嗎？</p><div className="flex gap-2"><button onClick={() => setDeletingItem(null)} className="flex-1 py-2 bg-gray-100 rounded">取消</button><button onClick={confirmDelete} className="flex-1 py-2 bg-red-600 text-white rounded">刪除</button></div></div></Modal>}
