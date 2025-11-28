@@ -416,15 +416,28 @@
           
           <div className="space-y-4">{filteredData.map(f => {
             const isOpen = (searchTerm || isBatchMode) ? true : expanded[f.id]; 
+            
+            // Calculate counts
+            const totalCount = f.items.length;
+            const watchedCount = f.items.filter(i => isWatched(i.name)).length;
+            
+            // Sort items: Unwatched first (false), Watched last (true)
+            const sortedItems = [...f.items].sort((a, b) => {
+                const wA = isWatched(a.name);
+                const wB = isWatched(b.name);
+                if (wA === wB) return 0;
+                return wA ? 1 : -1;
+            });
+
             return (
               <div key={f.id} className="bg-white rounded-lg shadow-sm border overflow-hidden">
                 <div onClick={() => !searchTerm && !isBatchMode && setExpanded(p => ({...p, [f.id]: !p[f.id]}))} className="flex justify-between p-4 bg-gray-50 border-b cursor-pointer">
-                  <div className="font-bold flex items-center gap-2"><span className={isOpen?'rotate-90':''}>▶</span>{f.name} <span className="text-xs bg-gray-200 px-2 rounded-full">{f.items.length}</span></div>
+                  <div className="font-bold flex items-center gap-2"><span className={isOpen?'rotate-90':''}>▶</span>{f.name} <span className="text-xs bg-gray-200 px-2 rounded-full">{watchedCount}/{totalCount}</span></div>
                   {!searchTerm && !isBatchMode && <button onClick={(e)=>importFolder(e, f)} className="text-xs bg-blue-100 text-blue-700 px-2 rounded flex gap-1"><Icons.Save /> 匯入</button>}
                 </div>
                 {isOpen && <div className="p-4">
                   {!searchTerm && !isBatchMode && <SeasonalForm onAdd={i => addItem(f.id, i)} />}
-                  <div className="mt-4 space-y-2">{f.items.map(i => (
+                  <div className="mt-4 space-y-2">{sortedItems.map(i => (
                     <div key={i.id} className={`flex gap-3 p-2 rounded border ${isWatched(i.name) ? 'bg-green-50 border-green-200' : 'bg-gray-50'}`}>
                       <div className="mt-1 flex-shrink-0">
                         {isBatchMode ? (
