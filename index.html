@@ -21,8 +21,8 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    // 引入 signInWithRedirect (解決手機彈窗問題)
-    import { getAuth, signInWithRedirect, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    // 引入 getRedirectResult 以處理重導向回來的狀態
+    import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
     import { getFirestore, doc, onSnapshot, setDoc, collection } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     
     // --- ⚠️ 請確認這裡填入正確的 Firebase Config ---
@@ -46,8 +46,9 @@
       window.doc = doc;
       window.onSnapshot = onSnapshot;
       window.setDoc = setDoc;
-      // 改用 Redirect 登入
+      window.signInWithPopup = signInWithPopup;
       window.signInWithRedirect = signInWithRedirect;
+      window.getRedirectResult = getRedirectResult;
       window.GoogleAuthProvider = GoogleAuthProvider;
       window.signOut = signOut;
       window.onAuthStateChanged = onAuthStateChanged;
@@ -153,13 +154,23 @@
           setUser(u);
           if (!u) setLoading(false);
         });
+        
+        // 檢查是否有重導向回來的結果 (解決手機登入後卡住的問題)
+        window.getRedirectResult(window.auth).catch(error => {
+           console.error("重導向登入失敗:", error);
+           if (error.code === 'auth/unauthorized-domain') {
+             alert("登入失敗：網域未授權。請到 Firebase Console -> Authentication -> Settings -> Authorized domains 新增您的網址。");
+           } else {
+             alert("登入失敗: " + error.message);
+           }
+        });
+
         return () => unsubAuth();
       }, []);
 
       useEffect(() => {
         if (!user || !window.db) return;
         
-        // 修正：使用固定的 App ID (anime_tracker_stable_v1) 以確保跨裝置同步
         const docRef = window.doc(window.db, "artifacts", APP_ID, "users", user.uid, "anime_data", "main");
 
         const unsubData = window.onSnapshot(docRef, (doc) => {
@@ -187,11 +198,21 @@
         window.setDoc(docRef, newData).catch(console.error);
       };
 
-      const login = () => {
+      const login = async () => {
         const provider = new window.GoogleAuthProvider();
-        // 手機上改用 Redirect 避免彈窗問題
-        window.signInWithRedirect(window.auth, provider).catch(alert);
+        try {
+          // 優先嘗試 popup，失敗則使用 redirect
+          await window.signInWithPopup(window.auth, provider);
+        } catch (error) {
+          console.log("Popup 失敗，嘗試 Redirect...", error);
+          if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+             await window.signInWithRedirect(window.auth, provider);
+          } else {
+             alert("登入錯誤: " + error.message);
+          }
+        }
       };
+      
       const logout = () => window.signOut(window.auth);
 
       // Actions
@@ -293,7 +314,7 @@
             {activeTab === 'history' && <HistoryView list={data.history} setData={setData} handleSearch={handleGoogleSearch} requestDelete={requestDelete} openEditModal={openEditModal} />}
           </main>
 
-          <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4px)] left-1/2 transform -translate-x-1/2 text-[10px] text-gray-400 pointer-events-none select-none opacity-50">v1.0.3</div>
+          <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4px)] left-1/2 transform -translate-x-1/2 text-[10px] text-gray-400 pointer-events-none select-none opacity-50">v1.0.4</div>
 
           {editingItem && <Modal title="編輯" onClose={() => setEditingItem(null)}><EditForm initialData={editingItem.item} onSave={saveEdit} onClose={() => setEditingItem(null)} /></Modal>}
           {deletingItem && <Modal title="刪除確認" onClose={() => setDeletingItem(null)}><div className="text-center p-4"><p className="mb-4">確定要刪除「{deletingItem.name}」嗎？</p><div className="flex gap-2"><button onClick={() => setDeletingItem(null)} className="flex-1 py-2 bg-gray-100 rounded">取消</button><button onClick={confirmDelete} className="flex-1 py-2 bg-red-600 text-white rounded">刪除</button></div></div></Modal>}
