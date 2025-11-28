@@ -2,10 +2,9 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>動漫追番 Anime Tracker (雲端版)</title>
+  <title>動漫追番 Anime Tracker (雲端同步版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   
-  <!-- iOS PWA 設定 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="追番君">
@@ -13,7 +12,6 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/svg+xml" href="logo.svg">
 
-  <!-- 引入 React, Tailwind, Firebase -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -21,11 +19,12 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    // 引入 getRedirectResult 以處理重導向回來的狀態
     import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { getFirestore, doc, onSnapshot, setDoc, collection } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     
-    // --- ⚠️ 請確認這裡填入正確的 Firebase Config ---
+    // =================================================================
+    // ⚠️ 關鍵步驟：請在此填入您的 Firebase Config 才能跨裝置同步
+    // =================================================================
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
       apiKey: "AIzaSyCXmP9znEh3Xm8SL2ylgr2MvehiAtCtKKQ",
       authDomain: "anime-sync-8910d.firebaseapp.com",
@@ -53,7 +52,8 @@
       window.signOut = signOut;
       window.onAuthStateChanged = onAuthStateChanged;
     } catch (e) {
-      console.warn("Firebase 初始化失敗", e);
+      console.error("Firebase 初始化失敗", e);
+      alert("資料庫連線失敗，請檢查 Config 設定");
     }
   </script>
 
@@ -77,8 +77,9 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
-    // --- 設定固定的 App ID 以確保同步 ---
-    const APP_ID = "anime_tracker_stable_v1";
+    // --- 固定 App ID 以確保資料不遺失且同步 ---
+    // 只要保留這個 ID，以後更新程式碼，資料都會從雲端抓回來
+    const APP_ID = "anime_tracker_production_v1";
 
     // --- 圖示 ---
     const Icons = {
@@ -104,7 +105,7 @@
       Google: () => <svg viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)"><path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"/><path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"/><path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"/><path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"/></g></svg>
     };
 
-    // --- 資料庫 (保持完整) ---
+    // --- 資料庫 ---
     const RATED_SOURCE = [{r:6,items:["Lycoris Recoil 莉可麗絲 Friends are thieves of time","藥師少女的獨語 第二季","青春豬頭少年不會夢到聖誕服女郎","薰香花朵凛然綻放","Silent Witch 沉默魔女的秘密"]},{r:5,items:["青春之箱","結緣甘神神社","紫雲寺家的兄弟姊妹","戀上換裝娃娃 第2季","我們不可能成為戀人！絕對不行。（※似乎可行？）"]},{r:4,items:["黑岩目高不把我的可愛放在眼裡","妻子變成小學生","Love Live! Superstar!!","只想告訴你","群花綻放、彷如修羅","我和班上最討厭的女生結婚了","GATE 奇幻自衛隊","天久鷹央的推理病歷表","SAKAMOTO DAYS 坂本日常 第2季度"]},{r:3,items:["七大罪 啟示錄四騎士 第二季","聽說你們要結婚","轉生為第七王子","版本日常學園","默示錄","我的幸福婚約 第二季","炎炎消防隊 參之章 上半","小市民系列 第二季","男女之間存在純友情嗎？（不，不存在！）","章魚嗶的原罪","mono女孩","隨興旅-That's Journey-","盾之勇者成名錄 Season 4"]},{r:2,items:["的偵探這沒用","忍者與殺手的兩人生活","僕愛君愛","未來日記","雖然是公會的櫃檯小姐，但因為不想加班所以打算獨自討伐迷宮頭目","歡迎光臨流放者食堂！"]},{r:1,items:["公爵千金的家庭教師","精靈幻想記 第二季","魔法光源股份有限公司","時光沙漏MOMENTARY LILY","剎那之花","這個美術社大有問題"]}];
     const SEASONAL_SOURCE = [{name:"2025 10月",items:["SPY×FAMILY 間諜家家酒 第三季","擁有超常技能的異世界流浪美食家 第二季","一拳超人 第三季","彈珠汽水瓶裡的千歲同學","對我垂涎欲滴的非人少女","我的英雄學院 FINAL SEASON","朋友的妹妹只纏著我","女騎士成為蠻族新娘","這裡是充滿笑容的職場。","機械女僕‧瑪麗","不動聲色的柏田與喜形於色的太田","野原廣志 午餐的流派","跨越種族與你相戀","永久的黃昏","不擅吸血的吸血鬼","不中用的前輩","賽馬娘 灰髮灰姑娘 第二季度","最後可以再拜託您一件事嗎"]},{name:"2025 7月",items:["章魚嗶的原罪","戀上換裝娃娃 第2季","Silent Witch 沉默魔女的秘密","薰香花朵凛然綻放","SAKAMOTO DAYS 坂本日常 第2季度","青春豬頭少年不會夢到聖誕服女郎","盾之勇者成名錄 Season 4","轉生為第七王子，隨心所欲的魔法學習之路 第二季","怪獸8號 第2季","住在拔作島上的我該如何是好？","我們不可能成為戀人！絕對不行。（※似乎可行？）","渡同學的××瀕臨崩壞","9-nine- Ruler's Crown","BadGirl","出租女友 第4季","歡迎光臨流放者食堂！","Dr.STONE 新石紀 SCIENCE FUTURE 第2季度","和雨·和你","膽大黨 第二季","遊樂場少女的異文化交流","公爵千金的家庭教師","歌聲是法式千層酥","最近的偵探這沒用"]},{name:"2025 4月",items:["持續狩獵史萊姆三百年，不知不覺就練到LV MAX 第二季","WITCH WATCH 魔女守護者","賽馬娘 シンデレラグレイ","男女之間存在純友情嗎？（不，不存在！）","小市民系列 第二季","直至魔女消逝","隨興旅-That's Journey-","炎炎消防隊 參之章","mono女孩","九龍大眾浪漫","因為太完美而不可愛而被解除婚約的聖女被賣到了鄰國","記憶縫線YOUR FORMA","Summer Pockets*","紫雲寺家的兄弟姊妹","忍者與殺手的兩人生活","推理要在晚餐後","在棒球場抓住我！","愛有點沉重的暗黑精靈從異世界緊追不放","前橋魔女","這是妳與我的最後戰場，或是開創世界的聖戰 第二季","快藏好！瑪奇娜同學！！","拜託請穿上 鷹峰同學","ツインズひなひま","Lycoris Recoil 莉可麗絲 Friends are thieves of time"]},{name:"2025 1月",items:["我獨自升級 第二季","藥師少女的獨語 第二季","我的幸福婚約 第二季","超超超超超喜歡你的100個女朋友 第2季","新石紀 第四季","異修羅 第2季","天久鷹央的推理病歷表","灰色：幻影扳機","Bang Dream!Ave Mujica","MOMENTARY LILY 剎那之花","我和班上最討厭的女生結婚了","一桿青空","雖然是公會的櫃檯小姐，但因為不想加班所以打算獨自討伐迷宮頭目","群花綻放、彷如修羅","青春特調蜂蜜檸檬蘇打","Unnamed Memory 無名記憶 Act.2","在沖繩喜歡上的女孩子方言講太多太棘手了","黑岩目高不把我的可愛放在眼裡","歡迎來到日本，妖精小姐","我與尼特女忍者的莫名同居生活","這公司有我喜歡的人","終究、還是會戀愛","全修","版本日常"]},{name:"2024 10月",items:["從零開始的異世界生活 第三季","平凡職業造就世界最強 第三季","地下城尋求邂逅","香格里拉 第二季","成為名留歷史的壞女人吧","當不成魔法師的女孩","結緣甘神神社","精靈幻想記 第二季","七大罪 啟示錄四騎士 第二季","魔法光源股份有限公司","常軌脫離","Love Live! Superstar!! 第3季","村井之戀","聽說你們要結婚","GOD.app第二季","青春之箱","妻子變成小學生","膽大黨"]},{name:"2024 7月",items:["我推的孩子","不時輕聲地以俄語遮羞的鄰座艾莉同學","敗北女角太多了","小市民系列","化成菜葉化成花","義妹生活","2.5次元的誘惑","身為VTuber的我因為忘記關台而成了傳說","模擬後宮體驗","雙生戀情密不可分","曾經、魔法少女和邪惡相互為敵。","女神咖啡廳 第2季","異世界失格","地下城中的人","少女如草花般綻放","深夜中的一拳","杖與劍的魔劍譚","鹿乃子乃子乃子虎式單單"]},{name:"2024 4月",items:["轉生史萊姆第三季","鬼滅之刃柱訓練","魔法科高校的劣等生第三季","為美好世界獻上祝福第三季","無職轉生第二季下半","蔚藍檔案","神明渴求著遊戲","聲優廣播的幕前幕後","搖曳露營第三季","我的英雄學院第七季","魔王學院的不適任著第二季下半","身為魔王的我娶了奴隸精靈為妻","夜晚的水母不會游泳","老夫老妻重返未來","恰如細雨般的戀歌","花野井同學與戀愛病","單人房、日照一般、附天使","怪獸8號"]},{name:"2024 1月",items:["歡迎來到實力至上主義教室第三季","肌肉魔法使第二季","我內心的糟糕念頭第二季","公主殿下，拷問的時間到了","異修羅","愚蠢天使與惡魔共舞","反派千金等級99","輪迴第七次的惡役令孃","弱角友棋同學第二季","夢想成為魔法少女","指尖相處 戀戀不捨","北海道辣妹金古錐","治癒魔法的錯誤使用法","秒殺外掛太強了","婚戒物語","魔都精兵的奴隸","迷宮飯","月光下的異世界之旅","我獨自升級","異世界溫泉"]},{name:"2023 10月",items:["進擊的巨人 完結後篇","賽馬娘 第三季","我想成為影之強者 第二季","盾之勇者 第三季","新石季 第二季","屍體如山的死亡遊戲 第二季","七大罪 啟示錄","轉生史萊姆 外傳","間諜家家酒 第二季","藥師少女的獨語","葬送的芙莉蓮","位於戀愛光譜極端的我們","超超超超超喜歡你的100個女朋友","家裡蹲吸血姬的鬱悶","凹凸魔女的親子日常","聖劍學院的魔劍使","16bit 的感動 ANOTHER LAYER"]},{name:"2023 7月",items:["無職轉生第二季","咒術第二季","堀與宮村","政宗君的復仇第二季","我喜歡的女孩忘記帶眼鏡","七魔劍支配天下","其實我乃最強","謊言遊戲","出租女友第三季","死神少爺與黑女僕第二季","夢懷美夢的少年是現實主義者","公司的小小前輩","成為悲劇元兇的最強異端","黑暗集會","間諜教室 第二季","妙廟美少女","五等分的花架","殭屍100","Fate","我的幸福婚約"]},{name:"2023 4月",items:["鬼滅之刃","新石紀","熊熊勇闖異世界","賽馬娘","總之就是很可愛","為這個世界獻上爆炎","肌肉魔法使","我推的孩子","勇者死了","第二次被異世界召喚","在異世界得到超強能力的我","轉生貴族的異世界冒險錄","我內心的可怕念頭","和山田君談場LV999的戀愛","女神咖啡廳","鄰人似銀河","百合是我的工作"]},{name:"2023 1月",items:["怕痛的我把防禦力點滿","不要欺負我 長靜同學","魔王學員的不適認者","地錯","總神眷顧","虛構推理","間諜教室","擁有超常技能的異世界流浪美食家","久保同學不放過我","不當歐尼講","冰屬性男子與無表情女王","傲嬌反派千金立傑洛特","為了養老金去異世界存八萬金","關於我在無意間被隔壁的天使變成廢材這件事","最強陰陽師異世界轉生記"]}];
     const RATING_TIERS = [{label:'⭐️⭐️⭐️⭐️⭐️⭐️ (神作)',value:6},{label:'⭐️⭐️⭐️⭐️⭐️ (必看)',value:5},{label:'⭐️⭐️⭐️⭐️ (推薦)',value:4},{label:'⭐️⭐️⭐️ (普通)',value:3},{label:'⭐️⭐️ (微妙)',value:2},{label:'⭐️ (雷作)',value:1},{label:'放棄 (棄番)',value:0},{label:'未評價',value:-1}];
@@ -152,26 +153,31 @@
         if (!window.auth) return;
         const unsubAuth = window.onAuthStateChanged(window.auth, (u) => {
           setUser(u);
-          if (!u) setLoading(false);
+          if (u) {
+             // 登入成功後開始監聽資料
+             syncData(u);
+          } else {
+             setLoading(false);
+          }
         });
         
-        // 檢查是否有重導向回來的結果 (解決手機登入後卡住的問題)
-        window.getRedirectResult(window.auth).catch(error => {
-           console.error("重導向登入失敗:", error);
-           if (error.code === 'auth/unauthorized-domain') {
-             alert("登入失敗：網域未授權。請到 Firebase Console -> Authentication -> Settings -> Authorized domains 新增您的網址。");
-           } else {
-             alert("登入失敗: " + error.message);
+        // 處理重導向登入結果 (Mobile)
+        window.getRedirectResult(window.auth).then((result) => {
+           if (result) {
+             console.log("Redirect login success:", result.user);
            }
+        }).catch((error) => {
+           console.error("Redirect login error:", error);
+           alert("登入錯誤: " + error.message);
         });
 
         return () => unsubAuth();
       }, []);
 
-      useEffect(() => {
-        if (!user || !window.db) return;
+      const syncData = (currentUser) => {
+        if (!currentUser || !window.db) return;
         
-        const docRef = window.doc(window.db, "artifacts", APP_ID, "users", user.uid, "anime_data", "main");
+        const docRef = window.doc(window.db, "artifacts", APP_ID, "users", currentUser.uid, "anime_data", "main");
 
         const unsubData = window.onSnapshot(docRef, (doc) => {
             if (doc.exists()) {
@@ -186,8 +192,7 @@
             console.warn("Sync Error", error);
             setLoading(false);
         });
-        return () => unsubData();
-      }, [user]);
+      };
 
       const setData = (newDataOrFn) => {
         if (!data || !user) return;
@@ -198,17 +203,17 @@
         window.setDoc(docRef, newData).catch(console.error);
       };
 
+      // 混合登入策略：先 Popup，失敗則 Redirect
       const login = async () => {
         const provider = new window.GoogleAuthProvider();
         try {
-          // 優先嘗試 popup，失敗則使用 redirect
           await window.signInWithPopup(window.auth, provider);
         } catch (error) {
-          console.log("Popup 失敗，嘗試 Redirect...", error);
+          // 如果 Popup 被擋或失敗，嘗試 Redirect
           if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
              await window.signInWithRedirect(window.auth, provider);
           } else {
-             alert("登入錯誤: " + error.message);
+             alert("登入失敗: " + error.message);
           }
         }
       };
@@ -217,6 +222,7 @@
 
       // Actions
       const handleGoogleSearch = (name) => window.open(`https://www.google.com/search?q=${encodeURIComponent(name)}`, '_blank');
+      
       const requestDelete = (type, id, name, folderId = null) => setDeletingItem({ type, id, name, folderId });
       const confirmDelete = () => {
         if (!deletingItem) return;
@@ -314,7 +320,7 @@
             {activeTab === 'history' && <HistoryView list={data.history} setData={setData} handleSearch={handleGoogleSearch} requestDelete={requestDelete} openEditModal={openEditModal} />}
           </main>
 
-          <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4px)] left-1/2 transform -translate-x-1/2 text-[10px] text-gray-400 pointer-events-none select-none opacity-50">v1.0.4</div>
+          <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4px)] left-1/2 transform -translate-x-1/2 text-[10px] text-gray-400 pointer-events-none select-none opacity-50">v1.0.5</div>
 
           {editingItem && <Modal title="編輯" onClose={() => setEditingItem(null)}><EditForm initialData={editingItem.item} onSave={saveEdit} onClose={() => setEditingItem(null)} /></Modal>}
           {deletingItem && <Modal title="刪除確認" onClose={() => setDeletingItem(null)}><div className="text-center p-4"><p className="mb-4">確定要刪除「{deletingItem.name}」嗎？</p><div className="flex gap-2"><button onClick={() => setDeletingItem(null)} className="flex-1 py-2 bg-gray-100 rounded">取消</button><button onClick={confirmDelete} className="flex-1 py-2 bg-red-600 text-white rounded">刪除</button></div></div></Modal>}
