@@ -21,18 +21,19 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    // 引入 signInWithRedirect (解決手機彈窗問題)
+    import { getAuth, signInWithRedirect, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
     import { getFirestore, doc, onSnapshot, setDoc, collection } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     
     // --- ⚠️ 請確認這裡填入正確的 Firebase Config ---
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
       apiKey: "AIzaSyCXmP9znEh3Xm8SL2ylgr2MvehiAtCtKKQ",
-  authDomain: "anime-sync-8910d.firebaseapp.com",
-  projectId: "anime-sync-8910d",
-  storageBucket: "anime-sync-8910d.firebasestorage.app",
-  messagingSenderId: "170655427304",
-  appId: "1:170655427304:web:069aa59a8160e9599e375d",
-  measurementId: "G-Z0YN0LVRG0"
+      authDomain: "anime-sync-8910d.firebaseapp.com",
+      projectId: "anime-sync-8910d",
+      storageBucket: "anime-sync-8910d.firebasestorage.app",
+      messagingSenderId: "170655427304",
+      appId: "1:170655427304:web:069aa59a8160e9599e375d",
+      measurementId: "G-Z0YN0LVRG0"
     };
 
     try {
@@ -45,7 +46,8 @@
       window.doc = doc;
       window.onSnapshot = onSnapshot;
       window.setDoc = setDoc;
-      window.signInWithPopup = signInWithPopup;
+      // 改用 Redirect 登入
+      window.signInWithRedirect = signInWithRedirect;
       window.GoogleAuthProvider = GoogleAuthProvider;
       window.signOut = signOut;
       window.onAuthStateChanged = onAuthStateChanged;
@@ -187,7 +189,8 @@
 
       const login = () => {
         const provider = new window.GoogleAuthProvider();
-        window.signInWithPopup(window.auth, provider).catch(alert);
+        // 手機上改用 Redirect 避免彈窗問題
+        window.signInWithRedirect(window.auth, provider).catch(alert);
       };
       const logout = () => window.signOut(window.auth);
 
@@ -290,7 +293,7 @@
             {activeTab === 'history' && <HistoryView list={data.history} setData={setData} handleSearch={handleGoogleSearch} requestDelete={requestDelete} openEditModal={openEditModal} />}
           </main>
 
-          <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4px)] left-1/2 transform -translate-x-1/2 text-[10px] text-gray-400 pointer-events-none select-none opacity-50">v1.0.2</div>
+          <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4px)] left-1/2 transform -translate-x-1/2 text-[10px] text-gray-400 pointer-events-none select-none opacity-50">v1.0.3</div>
 
           {editingItem && <Modal title="編輯" onClose={() => setEditingItem(null)}><EditForm initialData={editingItem.item} onSave={saveEdit} onClose={() => setEditingItem(null)} /></Modal>}
           {deletingItem && <Modal title="刪除確認" onClose={() => setDeletingItem(null)}><div className="text-center p-4"><p className="mb-4">確定要刪除「{deletingItem.name}」嗎？</p><div className="flex gap-2"><button onClick={() => setDeletingItem(null)} className="flex-1 py-2 bg-gray-100 rounded">取消</button><button onClick={confirmDelete} className="flex-1 py-2 bg-red-600 text-white rounded">刪除</button></div></div></Modal>}
